@@ -9,6 +9,16 @@ else
   exit 1
 fi
 
+# Check if FILES and TOKEN are set and not empty
+if [ -z "${FILES}" ]; then
+  echo "report_paths is not set or is empty"
+  exit 1
+fi
+if [ -z "${!TOKEN}" ]; then
+  echo "${!TOKEN} is not set or is empty"
+  exit 1
+fi
+
 # TODO: support multiple files
 curl -X POST \
   -H "Authorization: bearer ${!TOKEN}" \
