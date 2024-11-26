@@ -23,11 +23,7 @@ usage:
               mkdir test_results
               poetry run pytest -vv --junitxml=test_results/report.xml
         - mergifyio/upload:
-            token: MERGIFY_CI_ISSUES_TOKEN
-            repository_url: <<pipeline.trigger_parameters.github_app.repo_url>>
             report_paths: test_results/report.xml
-        - store_test_results:
-            path: test_results
 
   workflows:
     continuous_integration:
