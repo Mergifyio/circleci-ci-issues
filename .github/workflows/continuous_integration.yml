@@ -36,9 +36,19 @@ jobs:
   validate_orb:
     timeout-minutes: 5
     runs-on: ubuntu-22.04
+    outputs:
+      job_id: ${{ steps.get-job-id.outputs.job_id }}
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v4.1.7
+
+      - name: Setup Python 🔧
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: ">=3.12"
+
+      - name: Install CLI
+        run: pip install mergify-cli
 
       - name: Start mockServer with expectation initializer
         run: |
@@ -48,23 +58,36 @@ jobs:
 
       - name: Test Orb upload script
         id: gigid
-        run: |
-          export FAKE_VALID_TOKEN=fake-valid-token
-          bash src/scripts/upload.sh >> "$GITHUB_OUTPUT"
         env:
-          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-          TOKEN: FAKE_VALID_TOKEN
-          CIRCLE_JOB: test
-          CIRCLE_SHA1: 948da8c01b17ac2164039f3150221d5cfcae7ecc
+          MERGIFY_API_URL: http://localhost:1080
+          MERGIFY_TOKEN: fake-valid-token
           FILES: zfixtures/junit_example.xml
-          MERGIFY_API_SERVER: http://localhost:1080
-
-      - name: Check GIGID
-        env:
-          CI_ISSUE_GIGID: ${{ steps.gigid.outputs.CI_ISSUE_GIGID }}
+          CIRCLECI: true
+          CIRCLE_JOB: test
+          CIRCLE_REPOSITORY_URL: ${{ github.event.repository.html_url }}
+          CIRCLE_SHA1: 948da8c01b17ac2164039f3150221d5cfcae7ecc
         run: |
-          set -e
-          test "$CI_ISSUE_GIGID" = "1234azertyuiop"
+          export GITHUB_ACTIONS=false
+          bash src/scripts/upload.sh
+
+      - name: Get job ID
+        id: get-job-id
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            // Looks for exact match
+            let job = data.jobs.find(
+              (j) => j.name === context.job
+            )
+            if (!job) {
+              core.error("current job not found");
+            }
+            core.setOutput("job_id", String(job.id));
 
       - name: Mockserver logs
         if: always()
@@ -77,3 +100,26 @@ jobs:
         run: |
           circleci orb pack src > orb.yml
           circleci orb validate orb.yml
+
+  test-annotations:
+    needs: validate_orb
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check GIGID
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const annotations = await github.rest.checks.listAnnotations({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              check_run_id: ${{ needs.validate_orb.outputs.job_id }},
+            });
+            for (const annotation of annotations.data) {
+              if (annotation.message.trim() === "CI_ISSUE_GIGID=1234azertyuiop") {
+                core.info(`Annotations found: ${annotation.message}`)
+                return
+              }
+            }
+            console.log(annotations)
+            throw new Error("Annotations not found")

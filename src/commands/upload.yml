@@ -1,27 +1,36 @@
-description: Upload the XML report
+description: Upload the Junit XML report
+
 parameters:
   token:
     type: env_var_name
-    description: CI Issues Application Key
-    default: MERGIFY_CI_ISSUES_TOKEN
-  repository_url:
-    description: |
-      URL of the repository (should provide pipeline.trigger_parameters.github_app.repo_url)
-    type: string
+    description: Mergify Application Key
+    default: MERGIFY_TOKEN
   report_paths:
     description: Paths of the XML files to upload
     type: string
-  mergify_api_server:
+  mergify_api_url:
     description: URL of the Mergify API
     type: string
-    default: https://api.mergify.com/v1
+    default: https://api.mergify.com
+
 steps:
   - run:
-      name: Uploading the reports to Mergify CI Issues
-      environment:
-        TOKEN: <<parameters.token>>
-        REPO_URL: <<parameters.repository_url>>
-        FILES: <<parameters.report_paths>>
-        MERGIFY_API_SERVER: <<parameters.mergify_api_server>>
+      name: Install Python
       when: always
+      command: |
+        sudo apt-get update
+        sudo apt-get install -y python3
+
+  - run:
+      name: Install mergify-cli
+      when: always
+      command: pip install mergify-cli
+
+  - run:
+      name: Uploading the reports to Mergify CI Issues
+      when: always
+      environment:
+        MERGIFY_API_URL: <<parameters.mergify_api_url>>
+        MERGIFY_TOKEN: <<parameters.token>>
+        FILES: <<parameters.report_paths>>
       command: <<include(scripts/upload.sh)>>
